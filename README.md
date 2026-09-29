@@ -1,25 +1,27 @@
-# Empleados API
+# Empleados API — MongoDB
 
-API REST para administrar empleados, construida paso a paso en la Academia Java CDMX
-(Semana 3, del 24 al 26 de septiembre de 2026).
+API REST para administrar empleados, construida en la Academia Java CDMX: primero con **MySQL** (Semana 3, del
+24 al 26 de septiembre de 2026; está en la etiqueta `v1-mysql`) y después **migrada a MongoDB** (Semana 4, 28 y 29
+de septiembre).
 
 **Alumno:** Martin Gonzalez Rico
 
 ## Tecnologías
 
-Java 17 · Spring Boot 4.1.1 · Spring Data JPA (Hibernate) · Bean Validation · MySQL 8.4 en Docker ·
+Java 17 · Spring Boot 4.1.1 · Spring Data MongoDB · Bean Validation · MongoDB 8.2 y DbGate en Docker ·
 springdoc-openapi (Swagger) · WSL2 con Ubuntu 24.04
 
 ## Cómo levantarla
 
 ```bash
-docker compose up -d            # MySQL en Docker; espera a que docker compose ps diga (healthy)
+docker compose up -d            # MongoDB y DbGate; espera a que docker compose ps diga (healthy)
 ./mvnw spring-boot:run          # la API en http://localhost:8080
 ```
 
 - Swagger: http://localhost:8080/swagger-ui.html
-- Datos de ejemplo (30 empleados):
-  `docker exec -i empleados-mysql mysql --default-character-set=utf8mb4 -uacademia -pacademia123 empleados_db < datos/semilla-empleados.sql`
+- DbGate (ver los documentos): http://localhost:3000
+- Datos de ejemplo (30 empleados, una sola vez):
+  `docker exec -i empleados-mongo mongoimport --maintainInsertionOrder -u academia -p academia123 --authenticationDatabase admin -d empleados_db -c empleados < datos/semilla-empleados.json`
 
 ## Endpoints
 
@@ -30,27 +32,35 @@ docker compose up -d            # MySQL en Docker; espera a que docker compose p
 | POST | `/api/empleados` | Crea (201 + Location; 400 datos inválidos; 409 email repetido) |
 | PUT | `/api/empleados/{id}` | Modifica (200; 400; 404; 409) |
 | DELETE | `/api/empleados/{id}` | Borra (204; 404) |
-| GET | `/api/empleados/buscar?departamento=&texto=&activo=&salarioMinimo=&salarioMaximo=` | Búsqueda con filtros opcionales, por páginas |
+| GET | `/api/empleados/buscar?departamento=&texto=&activo=&salarioMinimo=&salarioMaximo=&ciudad=&habilidad=` | Búsqueda con filtros opcionales, sin importar acentos, por páginas |
 | GET | `/api/empleados/departamento/{departamento}` | Los de un departamento, por apellidos |
 | GET | `/api/empleados/salarios?minimo=&maximo=` | Los de un rango de salario, del mayor al menor |
+| GET | `/api/empleados/estadisticas/departamentos` | Por departamento: empleados, activos y salario promedio, mínimo y máximo (agregación) |
 
-## Arquitectura
+## De MySQL a MongoDB
 
-`EmpleadoController` (HTTP) → `EmpleadoService` (reglas) → `EmpleadoRepository` (Spring Data JPA) → MySQL.
-Los datos entran como `EmpleadoRequest` y salen como `EmpleadoResponse` / `PaginaResponse`; los errores
-salen como `ProblemDetail` desde `ManejadorErrores`.
+| | MySQL (`v1-mysql`) | MongoDB (ahora) |
+|---|---|---|
+| Dónde vive un empleado | una fila de la tabla `empleados` | un documento de la colección `empleados` |
+| id | `Long` consecutivo (1, 2, 3…) | `String`: un ObjectId de 24 caracteres |
+| Repositorio | `JpaRepository` + `@Query` JPQL | `MongoRepository` + `MongoTemplate`/`Criteria` |
+| Email único | `@Column(unique = true)` | `@Indexed(unique = true)` + `auto-index-creation` |
+| Dirección y habilidades | serían 2 tablas más y un JOIN | dentro del mismo documento |
+| Transacciones | `@Transactional` | no hay (un solo servidor); cada documento se guarda completo o nada |
+
+`git diff v1-mysql --stat` muestra exactamente qué archivos cambiaron.
 
 ## Evidencia
 
 | Día | Archivos |
 |---|---|
-| Jueves 24 — entorno | `evidencia/dia1/entorno.txt` · `compose-ps.txt` · `describe-empleados.txt` |
-| Viernes 25 — CRUD | `evidencia/dia2/crud.txt` · `mysql-select.txt` · `probar-crud.sh` |
-| Sábado 26 — búsquedas y paginación | `evidencia/dia3/busquedas.txt` · `persistencia.txt` · `probar-busquedas.sh` |
+| Semana 3 (MySQL) | `evidencia/dia1/` · `evidencia/dia2/` · `evidencia/dia3/` |
+| Lunes 28 — la migración | `evidencia/s4-dia1/crud.txt` · `mongo.txt` |
+| Martes 29 — lo que Mongo hace distinto | `evidencia/s4-dia2/comparacion.txt` · `busquedas.txt` · `mongo.txt` · `tipos-y-agregacion.txt` |
 
 ## Qué aprendí y qué me costó
 
-Durante el desarrollo de esta API REST reforcé varios conceptos que ya había trabajado anteriormente, como DTO, Controller, Repository y Entity, ya que en mi bootcamp de Generation desarrollé una API similar para un proyecto integrador.
-Lo que si fue totalmente nuevo y puede aprender fue a utilizar Swagger para probar y documentar los endpoints, ya que anteriormente utilizaba principalmente Postman.
-Lo que más me costó fue comprender cómo funciona Docker y cómo se integra con la aplicación y la base de datos.
-Tambien, me costó comprender al principio el concepto de paginación, pero al implementarlo pude entenderlo mejor.
+En este proyecto aprendí a trabajar con MongoDB y a entender sus diferencias con MySQL.
+También aprendí a manejar documentos, subdocumentos, listas, búsquedas y agregaciones.
+Lo que más me costó fue entender los conceptos y la forma de trabajar de MongoDB, ya que es diferente a MySQL.
+La práctica me ayudó a comprender mucho mejor cómo se almacenan y consultan los datos con una base de datos no relacional.
